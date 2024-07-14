@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>D3 Line Chart with Tooltip</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .line {
+            fill: none;
+            stroke: steelblue;
+            stroke-width: 3px;
+        }
+        .buttons {
+            margin-top: 30px; 
+            display: flex;
+            justify-content: center; /* Align buttons horizontally */
+        }
+        
+        .title {
+            font-size: 28px;
+            font-weight: bold;
+            text-anchor: middle; /* Center align text */
+        }
+      
+        rect {
+            pointer-events: all;
+            fill-opacity: 0;
+            stroke-opacity: 0;
+            z-index: 1;
+        }
+
+        .tooltip {
+            position: absolute;
+            padding: 5px;
+            background-color: rgb(11, 40, 65);
+            color: white;
+            border: 0px solid white;
+            border-radius: 0px;
+            display: none;
+            opacity: .75;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body onload="init()">
+    <div id="chart" style="margin-top: 80px;">
+        <svg id="line-chart" width="1500" height="500"></svg>
+        <div id="Slider"></div>
+        <div class="buttons">
+            <button onclick="window.location.href='index.html'">Dashboard</button>
+            <button onclick="window.location.href='median_income.html'">Median Income</button>
+        </div>
+    </div>
+
+    <div class="tooltip"></div>
+
+    <script>
+        // Set dimensions and margins
+        var margin = {top: 35, right: 20, bottom: 30, left: 80},
+            width = 1500 - margin.left - margin.right,
+            height = 500 - margin.top - margin.bottom;
+
+        // Parse the date
+        var parseTime = d3.timeParse("%Y-%m-%d");
+
+        // Set initial x and y scales
+        var x = d3.scaleTime().range([0, width]);
+        var y = d3.scaleLinear().range([height, 0]);
+
+        // Define the line function
+        var line = d3.line()
+            .x(function(d) { return x(d.date); })
+            .y(function(d) { return y(d.price); });
+
+        // Append the svg object to the chart div
+        var svg = d3.select("#line-chart")
+            .append("g")
+            .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+        // Load data and render initial chart
+        d3.csv("MSPUS.csv").then(function(data) {
+            // Format the data
+            data.forEach(function(d) {
+                d.date = parseTime(d.DATE);
+                d.price = +d.MSPUS;  // Convert to number
+            });
+
+            // Scale the domain of x and y scales
+            x.domain(d3.extent(data, function(d) { return d.date; }));
+            y.domain([0, d3.max(data, function(d) { return d.price; })]);
+
+            // Add the valueline path
+            svg.append("path")
+                .data([data])
+                .attr("class", "line")
+                .attr("d", line)
+                .attr("stroke-dasharray", function() { return this.getTotalLength() + " " + this.getTotalLength(); })
+                .attr("stroke-dashoffset", function() { return this.getTotalLength(); })
+                .transition()
+                .duration(2000)
+                .ease(d3.easeLinear)
+                .attr("stroke-dashoffset", 0);
+
+            // Add the X Axis
+            svg.append("g")
+                .attr("class", "x-axis")
+                .attr("transform", "translate(0," + height + ")")
+                .call(d3.axisBottom(x));
+
+            // Add the Y Axis
+            svg.append("g")
+                .attr("class", "y-axis")
+                .call(d3.axisLeft(y)
+                .tickFormat(function(d) { return "$" + d3.format(",")(d); }))
+
+            // Add the chart title
+            svg.append("text")
+                .attr("class", "title")
+                .attr("x", width / 2) // Center align text
+                .attr("y", margin.top - 50) // Adjusted y position
+                .text("Median Sales Price of Houses Sold for the United States (MSPUS)");
+
+            // Add the source credit
+            svg.append("text")
+                .attr("class", "source")
+                .attr("x", width - 110)
+                .attr("y", height + 30 ) // Adjusted y position
+                .style("font-size", "11px")
+                .text("Source: Census; HUD ");
+
+            // Tooltip logic
+            const tooltip = d3.select(".tooltip");
+
+            const circle = svg.append("circle")
+                .attr("r", 4)
+                .attr("fill", "red")
+                .style("stroke", "white")
+                .attr("opacity", 0.7)
+                .style("pointer-events", "none");
+
+            const listeningRect = svg.append("rect")
+                .attr("width", width)
+                .attr("height", height)
+                .style("fill", "none")
+                .style("pointer-events", "all");
+
+            // Start the tooltip at the first entry
+            circle
+                .attr("cx", x(data[0].date))
+                .attr("cy", y(data[0].price));
+            
+            tooltip
+                .style("left", `${x(data[0].date) + margin.left}px`)
+                .style("top", `${y(data[0].price) + margin.top + 50}px`)
+                .style("display", "block")
+                .html(`Date: ${d3.timeFormat('%B/%Y')(data[0].date)}<br>Price: $${d3.format(",")(Math.round(data[0].price))}`);
+            
+            listeningRect.on("mousemove", function(event) {
+                const [xCoord] = d3.pointer(event);
+                const bisectDate = d3.bisector(d => d.date).left;
+                const x0 = x.invert(xCoord);
+                const i = bisectDate(data, x0, 1);
+                const d0 = data[i - 1];
+                const d1 = data[i];
+                const d = x0 - d0.date > d1.date - x0 ? d1 : d0;
+                const xPos = x(d.date);
+                const yPos = y(d.price);
+
+                circle.attr("cx", xPos).attr("cy", yPos);
+
+                circle.transition()
+                    .duration(20)
+                    .attr("r", 4);
+
+                tooltip 
+                    .style("left", `${xPos + margin.left}px`)
+                    .style("top", `${yPos + margin.top + 50}px`)
+                    .style("display", "block")
+                    .html(`Date: ${d3.timeFormat('%B/%Y')(d.date)}<br>Price: $${d3.format(",")(Math.round(d.price))}`);
+            });
+
+            listeningRect.on("mouseleave", function() {
+                circle.transition().duration(50).attr("r", 0);
+                tooltip.style("display", "none");
+            });
+        });
+    </script>
+</body>
+</html>
