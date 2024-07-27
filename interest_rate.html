@@ -10,42 +10,42 @@
             stroke: steelblue;
             stroke-width: 3px;
         }
-        .buttons {
-            margin-top: 30px; 
+        .controls {
+            margin-top: 30px;
             display: flex;
-            justify-content: center; /* Align buttons horizontally */
+            justify-content: center; /* Align controls horizontally */
+            align-items: center; /* Vertically align items */
         }
-        
         .title {
             font-size: 28px;
             font-weight: bold;
             text-anchor: middle; /* Center align text */
         }
-      
         rect {
             pointer-events: all;
             fill-opacity: 0;
             stroke-opacity: 0;
             z-index: 1;
         }
-
         .tooltip {
             position: absolute;
             padding: 5px;
-            background-color: rgb(11, 40, 65);
-            color: white;
+            background-color: rgb(216, 219, 222);
+            color: rgb(14, 14, 14);
             border: 0px solid white;
             border-radius: 0px;
             display: none;
-            opacity: .75;
+            opacity: .55;
             font-size: 14px;
         }
     </style>
 </head>
-<body onload="init()">
+<body>
     <div id="chart" style="margin-top: 80px;">
         <svg id="line-chart" width="1500" height="500"></svg>
-        <div class="buttons">
+        <div class="controls">
+            <label for="year-dropdown">Select Decade:</label>
+            <select id="year-dropdown"></select>
             <button onclick="window.location.href='median_income.html'">Median income</button>
         </div>
     </div>
@@ -80,16 +80,19 @@
             // Format the data
             data.forEach(function(d) {
                 d.date = parseTime(d.DATE);
-                d.interest = parseFloat(d.MORTGAGE30US).toFixed(2);
-                console.log("Interest:", d.interest);
-  
+                d.interest = parseFloat(d.MORTGAGE30US);
             });
-            // Scale the domain of x and y scales
-            x.domain(d3.extent(data, function(d) { return d.date; }));
-            y.domain([2, 20]);
+
+            // Define min and max date for the entire dataset
+            var minDate = d3.min(data, d => d.date);
+            var maxDate = d3.max(data, d => d.date);
+
+            // Set initial domains
+            x.domain([minDate, maxDate]);
+            y.domain([d3.min(data, d => d.interest) - 1, d3.max(data, d => d.interest) + 1]);
 
             // Add the valueline path
-            svg.append("path")
+            var path = svg.append("path")
                 .data([data])
                 .attr("class", "line")
                 .attr("d", line)
@@ -104,14 +107,14 @@
             svg.append("g")
                 .attr("class", "x-axis")
                 .attr("transform", "translate(0," + height + ")")
-                .call(d3.axisBottom(x));
+                .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%b %Y")));
 
             // Add the Y Axis
             svg.append("g")
                 .attr("class", "y-axis")
                 .call(d3.axisLeft(y)
                 .tickFormat(function(d) { return d3.format(".0f")(d) + "%" ; }));
-           
+
             // Add the chart title
             svg.append("text")
                 .attr("class", "title")
@@ -145,18 +148,39 @@
                 .style("fill", "none")
                 .style("pointer-events", "all");
 
-            // Start the tooltip at the first entry
-            circle
-                .attr("cx", x(data[0].date))
-                .attr("cy", y(data[0].interest))
-                .attr("r", 4);
-            
-            tooltip
-                .style("left", `${x(data[0].date)}px`)
-                .style("top", `${y(data[0].interest) + 50}px`)
-                .style("display", "block")
-                .html(`Annotation: First record<br>Date: ${d3.timeFormat('%B/%Y')(data[0].date)}<br>Interest Rate: ${d3.format(".2f")(data[0].interest)}%`);
-            
+            // Function to find max interest in a dataset
+            function findMaxInterest(data) {
+                return d3.max(data, d => d.interest);
+            }
+
+            // Function to find the date of the max interest
+            function findDateOfMaxInterest(data, maxInterest) {
+                return data.find(d => d.interest === maxInterest).date;
+            }
+
+            function updateTooltipAndCircle(data) {
+                const maxInterest = findMaxInterest(data);
+                const dateOfMaxInterest = findDateOfMaxInterest(data, maxInterest);
+
+                const xPos = x(dateOfMaxInterest);
+                const yPos = y(maxInterest);
+
+                // Update circle and tooltip at the maximum interest point
+                circle
+                    .attr("cx", xPos)
+                    .attr("cy", yPos)
+                    .attr("r", 4);
+
+                tooltip
+                    .style("left", `${xPos + margin.left}px`)
+                    .style("top", `${yPos + margin.top + 50}px`)
+                    .style("display", "block")
+                    .html(`Highest interest<br>Date: ${d3.timeFormat('%B/%Y')(dateOfMaxInterest)}<br>Interest Rate: ${d3.format(".2f")(maxInterest)}%`);
+            }
+
+            // Initialize tooltip and circle for full dataset
+            updateTooltipAndCircle(data);
+
             listeningRect.on("mousemove", function(event) {
                 const [xCoord] = d3.pointer(event);
                 const bisectDate = d3.bisector(d => d.date).left;
@@ -175,26 +199,95 @@
                     .attr("r", 4);
 
                 tooltip 
-                    .style("left", `${xPos}px`)
-                    .style("top", `${yPos  + 50}px`)
+                    .style("left", `${xPos + margin.left}px`)
+                    .style("top", `${yPos + margin.top + 50}px`)
                     .style("display", "block")
                     .html(`Date: ${d3.timeFormat('%B/%Y')(d.date)}<br>Interest Rate: ${d3.format(".2f")(d.interest)}%`);
             });
 
             listeningRect.on("mouseleave", function() {
-                circle
-                    .transition()
-                    .duration(50)
-                    .attr("r", 4)
-                    .attr("cx", x(data[0].date))
-                    .attr("cy", y(data[0].interest));
-
-                tooltip
-                    .style("left", `${x(data[0].date) + margin.left}px`)
-                    .style("top", `${y(data[0].interest) + margin.top + 50}px`)
-                    .style("display", "block")
-                    .html(`Annotation: First record<br> Date: ${d3.timeFormat('%B/%Y')(data[0].date)}<br>interest: ${d3.format(".2f")(data[0].interest)}%`);
+                // Ensure circle and tooltip show the maximum interest point
+                updateTooltipAndCircle(data);
             });
+
+            // Populate dropdown with decades and an "All" option
+            const yearDropdown = document.getElementById("year-dropdown");
+            const uniqueYears = [...new Set(data.map(d => d.date.getFullYear()))];
+            const decades = [...new Set(uniqueYears.map(year => Math.floor(year / 10) * 10))];
+            
+            // Add "All" option
+            const allOption = document.createElement("option");
+            allOption.value = "all";
+            allOption.textContent = "All";
+            yearDropdown.appendChild(allOption);
+
+            // Add decade options
+            decades.forEach(decade => {
+                const option = document.createElement("option");
+                option.value = decade;
+                option.textContent = decade + "s";
+                yearDropdown.appendChild(option);
+            });
+
+            // Update chart based on selected decade
+            function updateChart() {
+                const selectedDecade = yearDropdown.value;
+                let startDate, endDate;
+
+                if (selectedDecade === "all") {
+                    startDate = minDate;
+                    endDate = maxDate;
+                } else {
+                    const minYear = +selectedDecade;
+                    const maxYear = minYear + 10;
+                    if (minYear === minDate.getFullYear()) {
+                        startDate = new Date(minYear, 0, 1);
+                        endDate = maxDate;
+                    } else if (minYear === maxDate.getFullYear()) {
+                        startDate = minDate;
+                        endDate = new Date(minYear, 11, 31);
+                    } else {
+                        startDate = new Date(minYear, 0, 1);
+                        endDate = new Date(maxYear, 0, 1);
+                    }
+                }
+
+                // Ensure x domain does not go beyond minDate and maxDate
+                startDate = d3.max([startDate, minDate]);
+                endDate = d3.min([endDate, maxDate]);
+
+                const filteredData = data.filter(d => d.date >= startDate && d.date <= endDate);
+
+                x.domain([startDate, endDate]);
+                y.domain([
+                    d3.min(filteredData, d => d.interest) - 1,
+                    d3.max(filteredData, d => d.interest) + 1
+                ]);
+
+                svg.selectAll(".line").remove();
+
+                svg.append("path")
+                    .data([filteredData])
+                    .attr("class", "line")
+                    .attr("d", line)
+                    .attr("stroke-dasharray", function() { return this.getTotalLength() + " " + this.getTotalLength(); })
+                    .attr("stroke-dashoffset", function() { return this.getTotalLength(); })
+                    .transition()
+                    .duration(4000)
+                    .ease(d3.easeLinear)
+                    .attr("stroke-dashoffset", 0);
+
+                svg.select(".x-axis").call(d3.axisBottom(x).tickFormat(d3.timeFormat("%b %Y")));
+                svg.select(".y-axis").call(d3.axisLeft(y)
+                    .tickFormat(function(d) { return d3.format(".0f")(d) + "%" ; }));
+
+                updateTooltipAndCircle(filteredData);
+            }
+
+            yearDropdown.addEventListener("change", updateChart);
+
+            // Initialize the chart with the full dataset
+            updateChart();
         });
     </script>
 </body>
