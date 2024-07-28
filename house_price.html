@@ -4,22 +4,23 @@
     <meta charset="UTF-8">
     <title>D3 Line Chart with Tooltip</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-annotation/2.5.1/d3-annotation.min.js"></script>
     <style>
         .line {
             fill: none;
-            stroke: steelblue;
-            stroke-width: 3px;
+            stroke: rgb(91, 90, 90);
+            stroke-width: 1px;
         }
         .controls {
             margin-top: 30px; 
             display: flex;
-            justify-content: center; /* Align controls horizontally */
-            align-items: center; /* Vertically align items */
+            justify-content: center;
+            align-items: center;
         }
         .title {
             font-size: 28px;
             font-weight: bold;
-            text-anchor: middle; /* Center align text */
+            text-anchor: middle;
         }
         rect {
             pointer-events: all;
@@ -36,7 +37,14 @@
             border-radius: 0px;
             display: none;
             opacity: .55;
-            font-size: 15px;
+            font-size: 14px;
+        }
+        .annotation-note-label {
+            fill: red; /* Change this to your desired color */
+        }
+        .annotation-note-content {
+            font-size: 12px;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -46,7 +54,7 @@
         <div class="controls">
             <label for="year-dropdown">Select Decade:</label>
             <select id="year-dropdown"></select>
-            <button onclick="window.location.href='index.html'">Dashboard</button>
+            <button onclick="window.location.href='index.html'">Home Page</button>
             <button onclick="window.location.href='median_income.html'">Median Income</button>
         </div>
     </div>
@@ -148,39 +156,6 @@
                 .attr("height", height)
                 .style("fill", "none")
                 .style("pointer-events", "all");
-
-            // Function to find max price in a dataset
-            function findMaxPrice(data) {
-                return d3.max(data, d => d.price);
-            }
-
-            // Function to find the date of the max price
-            function findDateOfMaxPrice(data, maxPrice) {
-                return data.find(d => d.price === maxPrice).date;
-            }
-
-            function updateTooltipAndCircle(data) {
-                const maxPrice = findMaxPrice(data);
-                const dateOfMaxPrice = findDateOfMaxPrice(data, maxPrice);
-
-                const xPos = x(dateOfMaxPrice);
-                const yPos = y(maxPrice);
-
-                // Update circle and tooltip at the maximum price point
-            circle
-                    .attr("cx", xPos)
-                    .attr("cy", yPos)
-                    .attr("r", 4);
-            
-            tooltip
-                    .style("left", `${xPos + margin.left}px`)
-                    .style("top", `${yPos + margin.top + 50}px`)
-                    .style("display", "block")
-                    .html(`Highest price<br>Date: ${d3.timeFormat('%B/%Y')(dateOfMaxPrice)}<br>Price: $${d3.format(",")(Math.round(maxPrice))}`);
-            }
-
-            // Initialize tooltip and circle for full dataset
-            updateTooltipAndCircle(data);
             
             listeningRect.on("mousemove", function(event) {
                 const [xCoord] = d3.pointer(event);
@@ -207,22 +182,52 @@
             });
 
             listeningRect.on("mouseleave", function() {
-                // Ensure circle and tooltip show the maximum price point
-                updateTooltipAndCircle(data);
+                circle.transition()
+                    .duration(500)
+                    .attr("r", 0);
+
+                tooltip.style("display", "none");
             });
 
-            // Populate dropdown with decades and an "All" option
+            const annotations = [
+                { date: new Date(2007,0), label: "2008: Housing Market Crash" },
+                { date: new Date(2020, 6), label: "Pandemic-driven demand sent total 2020 home sales to the highest level" },
+            ];
+
+            function drawAnnotations(filteredData) {
+                svg.selectAll(".annotation-group").remove();
+
+                const annotationData = annotations.filter(annotation => 
+                    annotation.date >= filteredData[0].date && annotation.date <= filteredData[filteredData.length - 1].date).map(annotation => ({
+                        note: { label: annotation.label },
+                        x: x(annotation.date),
+                        y: y(filteredData.find(d => d.date.getFullYear() === annotation.date.getFullYear() && d.date.getMonth() === annotation.date.getMonth()).price),
+                        dy: 25,
+                        dx: -25
+                    }));
+
+                const makeAnnotations = d3.annotation()
+                    .type(d3.annotationCalloutCircle)
+                    .annotations(annotationData);
+
+                svg.append("g")
+                    .attr("class", "annotation-group")
+                    .call(makeAnnotations);
+
+                // Apply custom styles to the annotations
+                svg.selectAll(".annotation-note-label")
+                    .style("fill", "red"); // Change this to your desired color
+            }
+
             const yearDropdown = document.getElementById("year-dropdown");
             const uniqueYears = [...new Set(data.map(d => d.date.getFullYear()))];
             const decades = [...new Set(uniqueYears.map(year => Math.floor(year / 10) * 10))];
             
-            // Add "All" option
             const allOption = document.createElement("option");
             allOption.value = "all";
             allOption.textContent = "All";
             yearDropdown.appendChild(allOption);
 
-            // Add decade options
             decades.forEach(decade => {
                 const option = document.createElement("option");
                 option.value = decade;
@@ -230,7 +235,6 @@
                 yearDropdown.appendChild(option);
             });
 
-            // Update chart based on selected decade
             function updateChart() {
                 const selectedDecade = yearDropdown.value;
                 let startDate, endDate;
@@ -253,7 +257,6 @@
                     }
                 }
 
-                // Ensure x domain does not go beyond minDate and maxDate
                 startDate = d3.max([startDate, minDate]);
                 endDate = d3.min([endDate, maxDate]);
 
@@ -282,12 +285,11 @@
                 svg.select(".y-axis").call(d3.axisLeft(y)
                 .tickFormat(function(d) { return "$" + d3.format(",")(d); }));
 
-                updateTooltipAndCircle(filteredData);
+                drawAnnotations(filteredData);
             }
 
             yearDropdown.addEventListener("change", updateChart);
 
-            // Initialize the chart with the full dataset
             updateChart();
         });
     </script>

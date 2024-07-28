@@ -4,22 +4,23 @@
     <meta charset="UTF-8">
     <title>D3 Line Chart with Tooltip</title>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-annotation/2.5.1/d3-annotation.min.js"></script>
     <style>
         .line {
             fill: none;
-            stroke: steelblue;
-            stroke-width: 3px;
+            stroke: rgb(91, 90, 90);
+            stroke-width: 1px;
         }
         .controls {
             margin-top: 30px;
             display: flex;
-            justify-content: center; /* Align controls horizontally */
-            align-items: center; /* Vertically align items */
+            justify-content: center;
+            align-items: center;
         }
         .title {
             font-size: 28px;
             font-weight: bold;
-            text-anchor: middle; /* Center align text */
+            text-anchor: middle;
         }
         rect {
             pointer-events: all;
@@ -38,6 +39,13 @@
             opacity: .55;
             font-size: 14px;
         }
+        .annotation-note-label {
+            fill: red; /* Change this to your desired color */
+        }
+        .annotation-note-content {
+            font-size: 12px;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -53,45 +61,35 @@
     <div class="tooltip"></div>
 
     <script>
-        // Set dimensions and margins
         var margin = {top: 35, right: 20, bottom: 30, left: 80},
             width = 1500 - margin.left - margin.right,
             height = 500 - margin.top - margin.bottom;
 
-        // Parse the date and interest
         var parseTime = d3.timeParse("%Y-%m-%d");
 
-        // Set initial x and y scales
         var x = d3.scaleTime().range([0, width]);
         var y = d3.scaleLinear().range([height, 0]);
 
-        // Define the line function
         var line = d3.line()
             .x(function(d) { return x(d.date); })
             .y(function(d) { return y(d.interest); });
 
-        // Append the svg object to the chart div
         var svg = d3.select("#line-chart")
             .append("g")
             .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
 
-        // Load data and render initial chart
         d3.csv("MORTGAGE30US.csv").then(function(data) {
-            // Format the data
             data.forEach(function(d) {
                 d.date = parseTime(d.DATE);
                 d.interest = parseFloat(d.MORTGAGE30US);
             });
 
-            // Define min and max date for the entire dataset
             var minDate = d3.min(data, d => d.date);
             var maxDate = d3.max(data, d => d.date);
 
-            // Set initial domains
             x.domain([minDate, maxDate]);
             y.domain([d3.min(data, d => d.interest) - 1, d3.max(data, d => d.interest) + 1]);
 
-            // Add the valueline path
             var path = svg.append("path")
                 .data([data])
                 .attr("class", "line")
@@ -103,34 +101,29 @@
                 .ease(d3.easeLinear)
                 .attr("stroke-dashoffset", 0);
 
-            // Add the X Axis
             svg.append("g")
                 .attr("class", "x-axis")
                 .attr("transform", "translate(0," + height + ")")
                 .call(d3.axisBottom(x).tickFormat(d3.timeFormat("%b %Y")));
 
-            // Add the Y Axis
             svg.append("g")
                 .attr("class", "y-axis")
                 .call(d3.axisLeft(y)
                 .tickFormat(function(d) { return d3.format(".0f")(d) + "%" ; }));
 
-            // Add the chart title
             svg.append("text")
                 .attr("class", "title")
-                .attr("x", width / 2) // Center align text
-                .attr("y", margin.top - 50) // Adjusted y position
+                .attr("x", width / 2)
+                .attr("y", margin.top - 50)
                 .text("30-Year Fixed Rate Mortgage Average in the United States");
 
-            // Add the source credit
             svg.append("text")
                 .attr("class", "source")
                 .attr("x", width - 110)
-                .attr("y", height + 30 ) // Adjusted y position
+                .attr("y", height + 30)
                 .style("font-size", "11px")
                 .text("Source: Freddie Mac");
 
-            // Tooltip logic
             const tooltip = d3.select("body")
                 .append("div")
                 .attr("class", "tooltip");
@@ -147,39 +140,6 @@
                 .attr("height", height)
                 .style("fill", "none")
                 .style("pointer-events", "all");
-
-            // Function to find max interest in a dataset
-            function findMaxInterest(data) {
-                return d3.max(data, d => d.interest);
-            }
-
-            // Function to find the date of the max interest
-            function findDateOfMaxInterest(data, maxInterest) {
-                return data.find(d => d.interest === maxInterest).date;
-            }
-
-            function updateTooltipAndCircle(data) {
-                const maxInterest = findMaxInterest(data);
-                const dateOfMaxInterest = findDateOfMaxInterest(data, maxInterest);
-
-                const xPos = x(dateOfMaxInterest);
-                const yPos = y(maxInterest);
-
-                // Update circle and tooltip at the maximum interest point
-                circle
-                    .attr("cx", xPos)
-                    .attr("cy", yPos)
-                    .attr("r", 4);
-
-                tooltip
-                    .style("left", `${xPos + margin.left}px`)
-                    .style("top", `${yPos + margin.top + 50}px`)
-                    .style("display", "block")
-                    .html(`Highest interest<br>Date: ${d3.timeFormat('%B/%Y')(dateOfMaxInterest)}<br>Interest Rate: ${d3.format(".2f")(maxInterest)}%`);
-            }
-
-            // Initialize tooltip and circle for full dataset
-            updateTooltipAndCircle(data);
 
             listeningRect.on("mousemove", function(event) {
                 const [xCoord] = d3.pointer(event);
@@ -198,7 +158,7 @@
                     .duration(20)
                     .attr("r", 4);
 
-                tooltip 
+                tooltip
                     .style("left", `${xPos + margin.left}px`)
                     .style("top", `${yPos + margin.top + 50}px`)
                     .style("display", "block")
@@ -206,22 +166,53 @@
             });
 
             listeningRect.on("mouseleave", function() {
-                // Ensure circle and tooltip show the maximum interest point
-                updateTooltipAndCircle(data);
+                circle.transition()
+                    .duration(500)
+                    .attr("r", 0);
+
+                tooltip.style("display", "none");
             });
 
-            // Populate dropdown with decades and an "All" option
+            const annotations = [
+                { date: new Date(1981, 9), label: "1981: The worst year for mortgage interest rates on record." },
+                { date: new Date(2008, 11), label: "2008: Subprime mortgage crisis" },
+                { date: new Date(2022, 0), label: "2022: Surge in mortgage rates" }
+            ];
+
+            function drawAnnotations(filteredData) {
+                svg.selectAll(".annotation-group").remove();
+
+                const annotationData = annotations.filter(annotation => 
+                    annotation.date >= filteredData[0].date && annotation.date <= filteredData[filteredData.length - 1].date).map(annotation => ({
+                        note: { label: annotation.label },
+                        x: x(annotation.date),
+                        y: y(filteredData.find(d => d.date.getFullYear() === annotation.date.getFullYear() && d.date.getMonth() === annotation.date.getMonth()).interest),
+                        dy: 0,
+                        dx: -25
+                    }));
+
+                const makeAnnotations = d3.annotation()
+                    .type(d3.annotationCalloutCircle)
+                    .annotations(annotationData);
+
+                svg.append("g")
+                    .attr("class", "annotation-group")
+                    .call(makeAnnotations);
+
+                // Apply custom styles to the annotations
+                svg.selectAll(".annotation-note-label")
+                    .style("fill", "red"); // Change this to your desired color
+            }
+
             const yearDropdown = document.getElementById("year-dropdown");
             const uniqueYears = [...new Set(data.map(d => d.date.getFullYear()))];
             const decades = [...new Set(uniqueYears.map(year => Math.floor(year / 10) * 10))];
-            
-            // Add "All" option
+
             const allOption = document.createElement("option");
             allOption.value = "all";
             allOption.textContent = "All";
             yearDropdown.appendChild(allOption);
 
-            // Add decade options
             decades.forEach(decade => {
                 const option = document.createElement("option");
                 option.value = decade;
@@ -229,7 +220,6 @@
                 yearDropdown.appendChild(option);
             });
 
-            // Update chart based on selected decade
             function updateChart() {
                 const selectedDecade = yearDropdown.value;
                 let startDate, endDate;
@@ -252,7 +242,6 @@
                     }
                 }
 
-                // Ensure x domain does not go beyond minDate and maxDate
                 startDate = d3.max([startDate, minDate]);
                 endDate = d3.min([endDate, maxDate]);
 
@@ -281,12 +270,11 @@
                 svg.select(".y-axis").call(d3.axisLeft(y)
                     .tickFormat(function(d) { return d3.format(".0f")(d) + "%" ; }));
 
-                updateTooltipAndCircle(filteredData);
+                drawAnnotations(filteredData);
             }
 
             yearDropdown.addEventListener("change", updateChart);
 
-            // Initialize the chart with the full dataset
             updateChart();
         });
     </script>
